@@ -1,9 +1,8 @@
 streamlit
-langchain
-langchain-community
 faiss-cpu
-pypdf
 sentence-transformers
-transformers
-torch
-accelerate
+rank-bm25
+pymupdf
+groq
+python-dotenv
+numpy
