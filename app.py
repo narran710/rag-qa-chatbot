@@ -16,7 +16,24 @@ load_dotenv()
 # -----------------------------
 st.set_page_config(page_title="RAG QA Chatbot", layout="wide")
 st.title("🤖 RAG QA Chatbot")
+st.caption(f"Streamlit Version: {st.__version__}")
 
+st.markdown("""
+<style>
+[data-testid="stFileUploader"] {
+    width: 100%;
+}
+
+[data-testid="stFileUploaderDropzone"] {
+    padding: 1.5rem;
+    border-radius: 12px;
+}
+
+[data-testid="stFileUploaderDropzone"] section {
+    padding: 1rem;
+}
+</style>
+""", unsafe_allow_html=True)
 # -----------------------------
 # API KEY
 # -----------------------------
@@ -42,7 +59,9 @@ defaults = {
     "bm25": None,
     "uploaded_filename": None,
     "file_bytes": None,
-    "selected_chats": set()
+    "selected_chats": set(),
+    "confirm_delete_selected": False,
+    "confirm_delete_all": False
 }
 
 for k, v in defaults.items():
@@ -175,6 +194,9 @@ def confidence_score(chunks, answer, model):
 # -----------------------------
 # CHAT HISTORY VIEW
 # -----------------------------
+# -----------------------------
+# CHAT HISTORY VIEW
+# -----------------------------
 if st.session_state.view == "history":
 
     st.subheader("📜 Chat History")
@@ -182,14 +204,103 @@ if st.session_state.view == "history":
     search = st.text_input("🔍 Search history")
 
     filtered = [
-        (i, q, a) for i, (q, a) in enumerate(st.session_state.history)
+        (i, q, a)
+        for i, (q, a) in enumerate(st.session_state.history)
         if search.lower() in q.lower()
     ]
 
     if filtered:
+
+        st.write("### Select chats")
+
         for i, q, a in filtered:
-            with st.expander(q):
-                st.write(a)
+
+            col1, col2 = st.columns([0.08, 0.92])
+
+            with col1:
+                checked = st.checkbox(
+                    "",
+                    value=i in st.session_state.selected_chats,
+                    key=f"chat_{i}"
+                )
+
+                if checked:
+                    st.session_state.selected_chats.add(i)
+                else:
+                    st.session_state.selected_chats.discard(i)
+
+            with col2:
+                with st.expander(q):
+                    st.write(a)
+
+        st.markdown("---")
+
+        col1, col2 = st.columns(2)
+
+        # DELETE SELECTED
+        with col1:
+            if st.button("🗑 Delete Selected"):
+                if st.session_state.selected_chats:
+                    st.session_state.confirm_delete_selected = True
+                else:
+                    st.warning("No chats selected")
+
+        # DELETE ALL
+        with col2:
+            if st.button("🗑 Delete All"):
+                if st.session_state.history:
+                    st.session_state.confirm_delete_all = True
+                else:
+                    st.warning("No chats to delete")
+
+        # CONFIRM DELETE SELECTED
+        if st.session_state.confirm_delete_selected:
+
+            st.warning("⚠️ Delete selected chats?")
+
+            c1, c2 = st.columns(2)
+
+            with c1:
+                if st.button("✅ Yes Delete Selected"):
+
+                    st.session_state.history = [
+                        item
+                        for idx, item in enumerate(st.session_state.history)
+                        if idx not in st.session_state.selected_chats
+                    ]
+
+                    st.session_state.selected_chats.clear()
+                    st.session_state.confirm_delete_selected = False
+
+                    st.success("Selected chats deleted")
+                    st.rerun()
+
+            with c2:
+                if st.button("❌ Cancel Selected"):
+                    st.session_state.confirm_delete_selected = False
+                    st.rerun()
+
+        # CONFIRM DELETE ALL
+        if st.session_state.confirm_delete_all:
+
+            st.warning("⚠️ Delete ALL chats?")
+
+            c1, c2 = st.columns(2)
+
+            with c1:
+                if st.button("🔥 Yes Delete All"):
+
+                    st.session_state.history = []
+                    st.session_state.selected_chats.clear()
+                    st.session_state.confirm_delete_all = False
+
+                    st.success("All chats deleted")
+                    st.rerun()
+
+            with c2:
+                if st.button("❌ Cancel All"):
+                    st.session_state.confirm_delete_all = False
+                    st.rerun()
 
     else:
         st.info("No chat history found")
