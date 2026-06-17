@@ -16,7 +16,6 @@ load_dotenv()
 # -----------------------------
 st.set_page_config(page_title="RAG QA Chatbot", layout="wide")
 st.title("🤖 RAG QA Chatbot")
-st.caption(f"Streamlit Version: {st.__version__}")
 
 st.markdown("""
 <style>
