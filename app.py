@@ -56,6 +56,7 @@ defaults = {
     "index": None,
     "model": None,
     "bm25": None,
+    "embeddings": None,
     "uploaded_filename": None,
     "file_bytes": None,
     "selected_chats": set(),
@@ -107,7 +108,7 @@ def read_file(file):
 # -----------------------------
 # CHUNKING
 # -----------------------------
-def split_text(text, chunk_size=300, overlap=100):
+def split_text(text, chunk_size=1000, overlap=250):
     chunks, start = [], 0
     while start < len(text):
         chunks.append(text[start:start + chunk_size])
@@ -119,7 +120,7 @@ def split_text(text, chunk_size=300, overlap=100):
 # -----------------------------
 @st.cache_resource(show_spinner=False)
 def create_retrievers(chunks):
-    model = SentenceTransformer("all-MiniLM-L6-v2")
+    model = SentenceTransformer("BAAI/bge-small-en-v1.5")
     embeddings = model.encode(chunks, normalize_embeddings=True)
 
     dimension = embeddings.shape[1]
@@ -127,12 +128,12 @@ def create_retrievers(chunks):
     index.add(np.array(embeddings))
 
     bm25 = BM25Okapi([c.split() for c in chunks])
-    return index, model, bm25
+    return index, model, bm25, embeddings
 
 # -----------------------------
 # RETRIEVE WITH COSINE
 # -----------------------------
-def retrieve(query, index, model, bm25, chunks, k=10):
+def retrieve(query, index, model, bm25, chunks, k=20):
 
     # 🔹 Dense retrieval (FAISS)
     q_embed = model.encode([query], normalize_embeddings=True)[0]
@@ -156,32 +157,23 @@ def retrieve(query, index, model, bm25, chunks, k=10):
     for i in range(len(combined_idx)):
         sim = np.dot(q_embed, chunk_embeddings[i])
 
-        # 🔥 amplify signal slightly (safe scaling)
-        sim = sim ** 0.5
-
         similarities.append(sim)
 
     # 🔥 Sort by similarity
     sorted_pairs = sorted(zip(similarities, combined_idx), reverse=True)
+    best_similarity = sorted_pairs[0][0]
 
     # 🔥 Return top 5 chunks
     filtered = [(chunks[idx], sim) for sim, idx in sorted_pairs if sim > 0.6]
 
-    return filtered[:5] if filtered else [(chunks[idx], sim) for sim, idx in sorted_pairs[:5]]
+    results = filtered[:5] if filtered else [
+        (chunks[idx], sim)
+        for sim, idx in sorted_pairs[:5]
+    ]
 
-# -----------------------------
-# CONFIDENCE SCORE
-# -----------------------------
-def confidence_score(chunks, answer, model):
-    chunk_emb = model.encode(chunks, normalize_embeddings=True)
-    ans_emb = model.encode([answer], normalize_embeddings=True)[0]
+    best_similarity = sorted_pairs[0][0]
 
-    sims = [np.dot(ans_emb, emb) for emb in chunk_emb]
-
-    # 🔥 Take top 3 average instead of max
-    top_k = sorted(sims, reverse=True)[:3]
-
-    return sum(top_k) / len(top_k)
+    return results, best_similarity
 
 # -----------------------------
 # CHAT HISTORY VIEW
@@ -333,12 +325,13 @@ else:
         chunks = split_text(text)
 
         with st.spinner("🔍 Analyzing document..."):
-            index, model, bm25 = create_retrievers(chunks)
+            index, model, bm25, embeddings = create_retrievers(chunks)
 
         st.session_state.chunks = chunks
         st.session_state.index = index
         st.session_state.model = model
         st.session_state.bm25 = bm25
+        st.session_state.embeddings = embeddings
         st.session_state.file_uploaded = True
 
     if not st.session_state.file_uploaded:
@@ -359,7 +352,7 @@ else:
 
         if query:
             with st.spinner("Thinking..."):
-                retrieved_results = retrieve(
+                retrieved_results, confidence = retrieve(
                     query,
                     st.session_state.index,
                     st.session_state.model,
@@ -376,12 +369,7 @@ else:
                 st.session_state.last_chat = (query, answer)
                 st.session_state.last_retrieval = retrieved_results
 
-                score = confidence_score(
-                    retrieved_chunks,
-                    answer,
-                    st.session_state.model
-                )
-                st.session_state.last_confidence = score
+                st.session_state.last_confidence = confidence
 
         if st.session_state.last_chat:
             q, a = st.session_state.last_chat
