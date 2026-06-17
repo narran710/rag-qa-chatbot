@@ -178,9 +178,6 @@ def retrieve(query, index, model, bm25, chunks, k=20):
 # -----------------------------
 # CHAT HISTORY VIEW
 # -----------------------------
-# -----------------------------
-# CHAT HISTORY VIEW
-# -----------------------------
 if st.session_state.view == "history":
 
     st.subheader("📜 Chat History")
