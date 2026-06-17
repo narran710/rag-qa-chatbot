@@ -67,13 +67,6 @@ defaults = {
 for k, v in defaults.items():
     if k not in st.session_state:
         st.session_state[k] = v
-
-# -----------------------------
-# COSINE SIMILARITY
-# -----------------------------
-def cosine_similarity(a, b):
-    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
-
 # -----------------------------
 # GROQ FUNCTION
 # -----------------------------
