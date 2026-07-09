@@ -136,6 +136,7 @@ def create_retrievers(chunks):
 def retrieve(query, index, model, bm25, chunks, k=20):
 
     # 🔹 Dense retrieval (FAISS)
+    query = "Represent this sentence for searching relevant passages: " + query
     q_embed = model.encode([query], normalize_embeddings=True)[0]
     scores, faiss_idx = index.search(np.array([q_embed]), k)
 
@@ -147,10 +148,7 @@ def retrieve(query, index, model, bm25, chunks, k=20):
     combined_idx = list(set(faiss_idx[0]) | set(bm25_idx))
 
     # 🔹 Re-rank using cosine similarity
-    chunk_embeddings = model.encode(
-        [chunks[i] for i in combined_idx],
-        normalize_embeddings=True
-    )
+    chunk_embeddings = st.session_state.embeddings[combined_idx]
 
     similarities = []
 
@@ -161,17 +159,19 @@ def retrieve(query, index, model, bm25, chunks, k=20):
 
     # 🔥 Sort by similarity
     sorted_pairs = sorted(zip(similarities, combined_idx), reverse=True)
-    best_similarity = sorted_pairs[0][0]
+    top_scores = [sim for sim, _ in sorted_pairs[:3]]
+    best_similarity = sum(top_scores) / len(top_scores)
 
     # 🔥 Return top 5 chunks
-    filtered = [(chunks[idx], sim) for sim, idx in sorted_pairs if sim > 0.6]
+    filtered = [(chunks[idx], sim) for sim, idx in sorted_pairs if sim > 0.45]
 
     results = filtered[:5] if filtered else [
         (chunks[idx], sim)
         for sim, idx in sorted_pairs[:5]
     ]
 
-    best_similarity = sorted_pairs[0][0]
+    top_scores = [sim for sim, _ in sorted_pairs[:3]]
+    best_similarity = sum(top_scores) / len(top_scores)
 
     return results, best_similarity
 
